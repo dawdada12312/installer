@@ -575,8 +575,21 @@ def install_ultralytics():
 
 def install_packages():
     """Install all required packages sequentially"""
-    all_packages = [
-        ('numpy', 'numpy'),
+    # First install basic dependencies
+    basic_packages = [
+        ('wheel', 'wheel'),
+        ('setuptools', 'setuptools'),
+        ('numpy', 'numpy')
+    ]
+    
+    # Then install PyTorch and related packages
+    pytorch_packages = [
+        'torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121',
+        'ultralytics'
+    ]
+    
+    # Finally install other packages
+    other_packages = [
         ('opencv-python', 'cv2'),
         ('mss', 'mss'),
         ('dearpygui', 'dearpygui'),
@@ -586,70 +599,70 @@ def install_packages():
         ('requests', 'requests'),
         ('tqdm', 'tqdm'),
         ('cuda-python', 'cuda'),
-        ('wheel', 'wheel'),
         ('tensorrt', 'tensorrt')
     ]
     
-    # Check which packages need to be installed
-    packages_to_install = []
-    pytorch_needed = not check_pytorch()
-    ultralytics_needed = not check_ultralytics()
-    
-    # Add regular packages first
-    for package_name, import_name in all_packages:
+    # Install basic packages first
+    print_header(" Installing Basic Dependencies ")
+    for package_name, import_name in basic_packages:
         if not check_package_installed(package_name):
-            packages_to_install.append((package_name, import_name))
-    
-    if not packages_to_install and not pytorch_needed and not ultralytics_needed:
-        print_color("\n✓ All packages are already installed", "GREEN")
-        return True
-    
-    # Print installation plan
-    print_header(" Installation Plan ")
-    if pytorch_needed:
-        print_color("• PyTorch CUDA needs to be installed", "YELLOW")
-    if ultralytics_needed:
-        print_color("• Ultralytics needs to be installed", "YELLOW")
-    for package, _ in packages_to_install:
-        print_color(f"• {package} needs to be installed", "YELLOW")
-    print()
-    
-    # Install PyTorch first if needed
-    if pytorch_needed:
-        print_header(" Installing PyTorch CUDA ")
-        if not install_pytorch_cuda():
-            print_color("\n⚠ PyTorch installation failed. Skipping ultralytics installation.", "RED")
-            ultralytics_needed = False
-    
-    # Install regular packages
-    if packages_to_install:
-        print_header(f" Installing {len(packages_to_install)} Package(s) ")
-        for i, (package_name, import_name) in enumerate(packages_to_install, 1):
-            if not install_single_package(package_name, import_name, i, len(packages_to_install)):
+            if not install_single_package(package_name, import_name, 1, len(basic_packages)):
                 print_color(f"\n⚠ Warning: {package_name} installation failed.", "YELLOW")
     
-    # Install ultralytics last if needed
-    if ultralytics_needed:
-        print_header(" Installing Ultralytics ")
-        install_ultralytics()
+    # Install PyTorch and related packages
+    print_header(" Installing PyTorch and Related Packages ")
+    python_exe = get_python_executable()
+    
+    for package in pytorch_packages:
+        print_color(f"\nInstalling {package.split()[0]}...", "BLUE")
+        try:
+            # First try to uninstall existing versions
+            subprocess.run([python_exe, '-m', 'pip', 'uninstall', '-y'] + package.split(), 
+                         capture_output=True)
+            
+            # Install the package
+            result = subprocess.run(
+                [python_exe, '-m', 'pip', 'install', '--no-cache-dir'] + package.split(),
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                print_color(f"✓ Successfully installed {package.split()[0]}", "GREEN")
+            else:
+                print_color(f"✗ Failed to install {package.split()[0]}", "RED")
+                if result.stderr:
+                    print_color(f"Error: {result.stderr}", "RED")
+        except Exception as e:
+            print_color(f"Error installing {package.split()[0]}: {str(e)}", "RED")
+    
+    # Install other packages
+    print_header(" Installing Additional Packages ")
+    for i, (package_name, import_name) in enumerate(other_packages, 1):
+        if not check_package_installed(package_name):
+            if not install_single_package(package_name, import_name, i, len(other_packages)):
+                print_color(f"\n⚠ Warning: {package_name} installation failed.", "YELLOW")
     
     # Final verification
-    print_header(" Final Verification ")
+    print_header(" Verifying Installations ")
     all_success = True
     
-    if pytorch_needed or ultralytics_needed:
-        if check_pytorch():
-            print_color("✓ PyTorch CUDA is working correctly", "GREEN")
-        else:
-            print_color("✗ PyTorch CUDA is not working", "RED")
-            all_success = False
-        
-        if check_ultralytics():
-            print_color("✓ Ultralytics is working correctly", "GREEN")
-        else:
-            print_color("✗ Ultralytics is not working", "RED")
-            all_success = False
+    # Verify PyTorch CUDA
+    if check_pytorch():
+        print_color("✓ PyTorch CUDA is working correctly", "GREEN")
+    else:
+        print_color("✗ PyTorch CUDA is not working", "RED")
+        all_success = False
     
+    # Verify Ultralytics
+    if check_ultralytics():
+        print_color("✓ Ultralytics is working correctly", "GREEN")
+    else:
+        print_color("✗ Ultralytics is not working", "RED")
+        all_success = False
+    
+    # Verify other packages
+    all_packages = basic_packages + other_packages
     for package_name, import_name in all_packages:
         if check_package_installed(package_name):
             print_color(f"✓ {package_name} is installed", "GREEN")
@@ -661,6 +674,7 @@ def install_packages():
         print_color("\n✓ All packages installed successfully!", "GREEN")
     else:
         print_color("\n⚠ Some packages failed to install properly.", "YELLOW")
+        print_color("You may need to manually install failed packages.", "YELLOW")
     
     return True
 
